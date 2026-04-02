@@ -31,6 +31,12 @@ final pendingMembersProvider = FutureProvider.autoDispose.family<List<EventMembe
   return ref.watch(eventsRepositoryProvider).fetchPendingMembers(eventId);
 });
 
+// Provider pour les membres acceptés d'un événement (visible par le créateur)
+final acceptedMembersProvider = FutureProvider.autoDispose.family<List<EventMemberModel>, String>((ref, eventId) async {
+  return ref.watch(eventsRepositoryProvider).fetchAcceptedMembers(eventId);
+});
+
+
 class EventsRepository {
   final PocketBase _pb;
   final RecordModel? _user;
@@ -164,6 +170,16 @@ class EventsRepository {
     );
     return records.map((r) => EventMemberModel.fromRecord(r)).toList();
   }
+
+  /// Récupérer les membres acceptés d'un événement
+  Future<List<EventMemberModel>> fetchAcceptedMembers(String eventId) async {
+    final records = await _pb.collection('event_members').getFullList(
+      filter: 'event = "$eventId" && status = "accepted"',
+      expand: 'user',
+    );
+    return records.map((r) => EventMemberModel.fromRecord(r)).toList();
+  }
+
 
   /// Accepter une demande de participation
   Future<void> acceptMember(String membershipId) async {

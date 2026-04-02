@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:frontend_flutter/features/chat/data/chat_repository.dart';
 import 'package:frontend_flutter/features/chat/data/chat_models.dart';
 import 'package:frontend_flutter/shared/providers/auth_provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:frontend_flutter/core/network/pb_client.dart';
 import 'package:intl/intl.dart';
 
 class ChatDetailScreen extends ConsumerStatefulWidget {
@@ -209,18 +211,43 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
   }
 
   Widget _buildMessageBubble(MessageModel msg, bool isMe) {
+    final theme = Theme.of(context);
+    final pb = ref.read(pocketBaseProvider);
+    
+    final avatarWidget = CircleAvatar(
+      radius: 16,
+      backgroundColor: theme.primaryColor.withOpacity(0.1),
+      backgroundImage: (msg.authorAvatar != null && msg.authorAvatar!.isNotEmpty)
+          ? CachedNetworkImageProvider('${pb.baseUrl}/api/files/users/${msg.authorId}/${msg.authorAvatar}')
+          : null,
+      child: (msg.authorAvatar == null || msg.authorAvatar!.isEmpty)
+          ? Icon(Icons.person, size: 20, color: theme.primaryColor)
+          : null,
+    );
+    
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-        decoration: BoxDecoration(
-          color: isMe ? Colors.deepPurple : Colors.grey.shade200,
-          borderRadius: BorderRadius.circular(12).copyWith(
-            bottomRight: isMe ? const Radius.circular(0) : const Radius.circular(12),
-            bottomLeft: isMe ? const Radius.circular(12) : const Radius.circular(0),
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Row(
+          mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            if (!isMe) ...[
+              avatarWidget,
+              const SizedBox(width: 8),
+            ],
+            Flexible(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.7),
+                decoration: BoxDecoration(
+          color: isMe ? theme.primaryColor : const Color(0xFFF1F5F9), // Slate 100 for better text contrast
+          borderRadius: BorderRadius.circular(16).copyWith(
+            bottomRight: isMe ? const Radius.circular(4) : const Radius.circular(16),
+            bottomLeft: isMe ? const Radius.circular(16) : const Radius.circular(4),
           ),
+          border: isMe ? null : Border.all(color: const Color(0xFFE2E8F0)), // Slate 200 setup
         ),
         child: Column(
           crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
@@ -228,20 +255,28 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
           children: [
             if (!isMe)
               Padding(
-                padding: const EdgeInsets.only(bottom: 2),
+                padding: const EdgeInsets.only(bottom: 4),
                 child: Text(
                   msg.authorName ?? 'Participant',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10, color: Colors.deepPurple),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: theme.primaryColor),
                 ),
               ),
             Text(
               msg.content,
-              style: TextStyle(color: isMe ? Colors.white : Colors.black87),
+              style: TextStyle(
+                color: isMe ? Colors.white : const Color(0xFF0F172A), // Slate 900
+                fontSize: 15, 
+                height: 1.3,
+              ),
             ),
-            const SizedBox(height: 2),
+            const SizedBox(height: 4),
             Text(
               DateFormat('HH:mm').format(msg.created),
-              style: TextStyle(fontSize: 9, color: isMe ? Colors.white70 : Colors.black45),
+              style: TextStyle(fontSize: 11, color: isMe ? const Color(0xCCFFFFFF) : const Color(0xFF64748B)),
+            ),
+          ],
+        ),
+      ),
             ),
           ],
         ),
@@ -250,29 +285,59 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
   }
 
   Widget _buildInput(String conversationId) {
+    final theme = Theme.of(context);
+    
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: const BoxDecoration(
         color: Colors.white,
-        border: Border(top: BorderSide(color: Colors.grey.shade200)),
+        border: Border(top: BorderSide(color: Color(0xFFE2E8F0))), // Slate 200
       ),
       child: SafeArea(
         child: Row(
           children: [
             Expanded(
-              child: TextField(
-                controller: _controller,
-                textCapitalization: TextCapitalization.sentences,
-                onSubmitted: (_) => _send(conversationId),
-                decoration: const InputDecoration(
-                  hintText: 'Écrire un message...',
-                  border: InputBorder.none,
+              child: Semantics(
+                label: 'Champ de saisie pour message de discussion',
+                child: TextField(
+                  controller: _controller,
+                  textCapitalization: TextCapitalization.sentences,
+                  onSubmitted: (_) => _send(conversationId),
+                  decoration: InputDecoration(
+                    hintText: 'Écrire un message...',
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(24),
+                      borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(24),
+                      borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(24),
+                      borderSide: BorderSide(color: theme.primaryColor, width: 2),
+                    ),
+                    fillColor: const Color(0xFFF8FAFC),
+                    filled: true,
+                  ),
                 ),
               ),
             ),
-            IconButton(
-              icon: const Icon(Icons.send, color: Colors.deepPurple),
-              onPressed: () => _send(conversationId),
+            const SizedBox(width: 8),
+            Semantics(
+              button: true,
+              label: 'Envoyer le message',
+              child: Container(
+                decoration: BoxDecoration(
+                  color: theme.primaryColor,
+                  shape: BoxShape.circle,
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.send, color: Colors.white, size: 20),
+                  onPressed: () => _send(conversationId),
+                ),
+              ),
             ),
           ],
         ),

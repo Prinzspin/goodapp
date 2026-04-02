@@ -1,5 +1,6 @@
 // ========================================================
 // HOOKS : GOOD APP (LOGIQUE MÉTIER & SÉCURITÉ)
+// Compatible PocketBase v0.23 (API sans dao(), sans findRecordsByExpr)
 // ========================================================
 
 onRecordAfterCreateSuccess((e) => {
@@ -7,18 +8,18 @@ onRecordAfterCreateSuccess((e) => {
         const eventId = e.record.get("id");
         const creatorId = e.record.get("creator");
 
-        // A. Créer la conversation (si pas déjà existante)
-        const checkConv = $app.findRecordsByExpr("conversations", $dbx.exp("event = {:event}", { "event": eventId }));
-        if (!checkConv || checkConv.length === 0) {
+        // A. Créer la conversation si elle n'existe pas
+        const existingConvs = $app.findRecordsByFilter("conversations", `event = "${eventId}"`, "", 1, 0);
+        if (!existingConvs || existingConvs.length === 0) {
             const convCol = $app.findCollectionByNameOrId("conversations");
             const conversation = new Record(convCol);
             conversation.set("event", eventId);
             $app.save(conversation);
         }
 
-        // B. Créer l'owner
-        const checkMem = $app.findRecordsByExpr("event_members", $dbx.exp("event = {:event} AND user = {:user}", { "event": eventId, "user": creatorId }));
-        if (!checkMem || checkMem.length === 0) {
+        // B. Créer le membership owner si absent
+        const existingMem = $app.findRecordsByFilter("event_members", `event = "${eventId}" && user = "${creatorId}"`, "", 1, 0);
+        if (!existingMem || existingMem.length === 0) {
             const memCol = $app.findCollectionByNameOrId("event_members");
             const member = new Record(memCol);
             member.set("event", eventId);
@@ -38,23 +39,36 @@ function handleMembershipSync(record) {
         const userId = record.get("user");
         const status = record.get("status");
 
+        // Auto-like si le membre est accepted
         if (status === "accepted") {
-            const parsedLikes = $app.findRecordsByExpr("event_likes", $dbx.exp("event = {:event} AND user = {:user}", {"event": eventId, "user": userId}));
-            if (!parsedLikes || parsedLikes.length === 0) {
-                 const likesCol = $app.findCollectionByNameOrId("event_likes");
-                 const newLike = new Record(likesCol);
-                 newLike.set("event", eventId);
-                 newLike.set("user", userId);
-                 $app.save(newLike);
+            try {
+                const existingLikes = $app.findRecordsByFilter("event_likes", `event = "${eventId}" && user = "${userId}"`, "", 1, 0);
+                if (!existingLikes || existingLikes.length === 0) {
+                    const likesCol = $app.findCollectionByNameOrId("event_likes");
+                    const newLike = new Record(likesCol);
+                    newLike.set("event", eventId);
+                    newLike.set("user", userId);
+                    $app.save(newLike);
+                }
+            } catch (likeErr) {
+                $app.logger().error("HOOK LIKE SYNC WARNING (non-fatal): " + likeErr);
             }
         }
 
-        const acceptedMembers = $app.findRecordsByExpr("event_members", $dbx.exp("event = {:event} AND status = 'accepted'", {"event": eventId}));
-        let acceptedCount = acceptedMembers ? acceptedMembers.length : 0;
-        
-        $app.db()
-            .newQuery("UPDATE events SET members_count={:m} WHERE id={:id}")
-            .bind({ "m": acceptedCount, "id": eventId }).execute();
+        // Mettre à jour members_count
+        try {
+            const countResult = new DynamicModel({ "cnt": 0 });
+            $app.db()
+                .newQuery(`SELECT COUNT(*) as cnt FROM event_members WHERE event="${eventId}" AND status='accepted'`)
+                .one(countResult);
+            const acceptedCount = countResult.get("cnt") || 0;
+            $app.db()
+                .newQuery("UPDATE events SET members_count={:m} WHERE id={:id}")
+                .bind({ "m": acceptedCount, "id": eventId })
+                .execute();
+        } catch (countErr) {
+            $app.logger().error("HOOK COUNT SYNC WARNING (non-fatal): " + countErr);
+        }
     } catch (err) {
         $app.logger().error("HOOK MEMBERSHIP SYNC ERROR: " + err);
     }
@@ -88,6 +102,6 @@ onRecordCreateRequest((e) => {
     } catch (err) {
         throw new BadRequestError("Accès refusé. Membership accepted requis.");
     }
-    
+
     return e.next();
 }, "messages");

@@ -9,15 +9,30 @@ import 'package:frontend_flutter/features/chat/data/chat_repository.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 
-class EventDetailScreen extends ConsumerWidget {
+class EventDetailScreen extends ConsumerStatefulWidget {
   final String eventId;
 
   const EventDetailScreen({super.key, required this.eventId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final eventAsync = ref.watch(eventDetailProvider(eventId));
-    final membershipAsync = ref.watch(eventMembershipProvider(eventId));
+  ConsumerState<EventDetailScreen> createState() => _EventDetailScreenState();
+}
+
+class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
+
+  void _refreshAll() {
+    ref.invalidate(pendingMembersProvider(widget.eventId));
+    ref.invalidate(acceptedMembersProvider(widget.eventId));
+    ref.invalidate(eventDetailProvider(widget.eventId));
+    ref.invalidate(eventMembershipProvider(widget.eventId));
+    ref.invalidate(eventsListProvider);
+    ref.invalidate(conversationsListProvider);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final eventAsync = ref.watch(eventDetailProvider(widget.eventId));
+    final membershipAsync = ref.watch(eventMembershipProvider(widget.eventId));
     final currentUser = ref.watch(authStateProvider);
 
     return Scaffold(
@@ -28,7 +43,7 @@ class EventDetailScreen extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (event.photos.isNotEmpty)
-                _buildPhotoGallery(context, ref, event)
+                _buildPhotoGallery(event)
               else
                 Container(
                   height: 150,
@@ -43,32 +58,46 @@ class EventDetailScreen extends ConsumerWidget {
                   children: [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
-                          child: Text(event.title, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                          child: Semantics(
+                            header: true,
+                            child: Text(
+                              event.title, 
+                              style: Theme.of(context).textTheme.headlineMedium,
+                            ),
+                          ),
                         ),
-                        _buildStatusBadge(event),
+                        const SizedBox(width: 16),
+                        _buildStatusBadge(context, event),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    _buildIconInfo(Icons.access_time_outlined, DateFormat('EEEE d MMMM, HH:mm').format(event.startDate)),
-                    if (event.locationName != null) _buildIconInfo(Icons.place_outlined, event.locationName!),
+                    const SizedBox(height: 16),
+                    _buildIconInfo(context, Icons.access_time_outlined, DateFormat('EEEE d MMMM, HH:mm').format(event.startDate)),
+                    if (event.locationName != null) _buildIconInfo(context, Icons.place_outlined, event.locationName!),
                     const Divider(height: 32),
-                    const Text('Description', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
+                    
+                    Semantics(
+                      header: true,
+                      child: Text('Description', style: Theme.of(context).textTheme.titleLarge),
+                    ),
+                    const SizedBox(height: 12),
                     Text(
                       event.description.isNotEmpty ? event.description : "Pas de description.",
-                      style: const TextStyle(fontSize: 16, height: 1.5, color: Colors.black87),
+                      style: Theme.of(context).textTheme.bodyLarge,
                     ),
                     const SizedBox(height: 32),
 
                     // Section Membership & Action
-                    _buildMembershipSection(context, ref, event, membershipAsync),
+                    _buildMembershipSection(event, membershipAsync),
 
                     // Section Gestion Demandes (visible UNIQUEMENT par le créateur)
                     if (currentUser != null && event.creatorId == currentUser.id) ...[
                       const SizedBox(height: 32),
-                      _buildPendingRequestsSection(context, ref, event),
+                      _buildPendingRequestsSection(event),
+                      const SizedBox(height: 24),
+                      _buildAcceptedMembersSection(event),
                     ],
                   ],
                 ),
@@ -83,7 +112,7 @@ class EventDetailScreen extends ConsumerWidget {
   }
 
   // === PHOTOS ===
-  Widget _buildPhotoGallery(BuildContext context, WidgetRef ref, EventModel event) {
+  Widget _buildPhotoGallery(EventModel event) {
     final pb = ref.read(pocketBaseProvider);
     final baseUrl = pb.baseUrl;
     return SizedBox(
@@ -109,91 +138,99 @@ class EventDetailScreen extends ConsumerWidget {
   }
 
   // === MEMBERSHIP SECTION ===
-  Widget _buildMembershipSection(
-      BuildContext context, WidgetRef ref, EventModel event, AsyncValue<EventMemberModel?> membershipAsync) {
+  Widget _buildMembershipSection(EventModel event, AsyncValue<EventMemberModel?> membershipAsync) {
     return membershipAsync.when(
       data: (membership) {
         final isOwner = membership?.role == 'owner';
         final isAccepted = membership?.status == 'accepted';
 
-        // CAS 1 : Membre accepted / Owner
         if (isOwner || isAccepted) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(color: const Color(0xFFF0FDF4), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFBBF7D0))),
                 child: Row(children: [
-                  const Icon(Icons.check_circle, color: Colors.green),
+                  const Icon(Icons.check_circle, color: Color(0xFF16A34A)),
                   const SizedBox(width: 12),
-                  Text(isOwner ? 'Vous êtes l\'organisateur' : 'Vous participez à cet événement',
-                      style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+                  Expanded(
+                    child: Text(isOwner ? 'Vous êtes l\'organisateur' : 'Vous participez à cet événement',
+                        style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF16A34A))),
+                  ),
                 ]),
               ),
               const SizedBox(height: 16),
-              ElevatedButton.icon(
-                onPressed: () => context.push('/chat/${event.id}'),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple, minimumSize: const Size(double.infinity, 50)),
-                icon: const Icon(Icons.chat_bubble_outline, color: Colors.white),
-                label: const Text('Accéder à la discussion', style: TextStyle(color: Colors.white)),
+              Semantics(
+                button: true,
+                label: 'Accéder à la discussion de l\'événement',
+                child: ElevatedButton.icon(
+                  onPressed: () => context.push('/chat/${event.id}'),
+                  icon: const Icon(Icons.chat_bubble_outline),
+                  label: const Text('Accéder à la discussion'),
+                ),
               ),
             ],
           );
         }
 
-        // CAS 2 : Pending
         if (membership?.status == 'pending') {
           return Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.amber.shade50, borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.amber.shade200),
+              color: const Color(0xFFFEF3C7), borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFFDE68A)),
             ),
             child: const Row(children: [
-              Icon(Icons.hourglass_empty, color: Colors.amber),
+              Icon(Icons.hourglass_empty, color: Color(0xFFD97706)),
               SizedBox(width: 12),
-              Text('Demande envoyée (En attente de validation)', style: TextStyle(fontWeight: FontWeight.w600)),
+              Expanded(
+                child: Text('Demande envoyée (En attente de validation)', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFFB45309))),
+              ),
             ]),
           );
         }
 
-        // CAS 3 : Rejected
         if (membership?.status == 'rejected') {
           return Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.red.shade50, borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.red.shade200),
+              color: const Color(0xFFFEF2F2), borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFFECACA)),
             ),
             child: const Row(children: [
-              Icon(Icons.cancel_outlined, color: Colors.red),
+              Icon(Icons.cancel_outlined, color: Color(0xFFDC2626)),
               SizedBox(width: 12),
-              Text('Votre demande a été refusée', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.red)),
+              Expanded(
+                child: Text('Votre demande a été refusée', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF991B1B))),
+              ),
             ]),
           );
         }
 
-        // CAS 4 : Non membre
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (!event.isPublic)
-              Container(
-                margin: const EdgeInsets.only(bottom: 24),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(color: Colors.blueGrey.shade50, borderRadius: BorderRadius.circular(12)),
-                child: const Row(children: [
-                  Icon(Icons.privacy_tip_outlined, color: Colors.grey),
-                  SizedBox(width: 12),
-                  Expanded(child: Text('Événement privé. Accès à la discussion après validation par l\'organisateur.',
-                      style: TextStyle(fontSize: 13, color: Colors.grey))),
-                ]),
+              Semantics(
+                label: 'Information : Événement privé',
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(12)),
+                  child: const Row(children: [
+                    Icon(Icons.privacy_tip_outlined, color: Color(0xFF64748B)),
+                    SizedBox(width: 12),
+                    Expanded(child: Text('Événement privé. Accès à la discussion après validation.',
+                        style: TextStyle(fontSize: 14, color: Color(0xFF475569)))),
+                  ]),
+                ),
               ),
-            SizedBox(
-              height: 50,
+            Semantics(
+              button: true,
+              label: event.isPublic ? 'Rejoindre l\'événement' : 'Envoyer une demande pour rejoindre',
               child: ElevatedButton(
-                onPressed: () => _joinEvent(context, ref, event),
+                onPressed: () => _joinEvent(event),
                 child: Text(event.isPublic ? 'Rejoindre l\'événement' : 'Demander à rejoindre'),
               ),
             ),
@@ -206,24 +243,17 @@ class EventDetailScreen extends ConsumerWidget {
   }
 
   // === JOIN ACTION ===
-  Future<void> _joinEvent(BuildContext context, WidgetRef ref, EventModel event) async {
+  Future<void> _joinEvent(EventModel event) async {
     try {
       await ref.read(eventsRepositoryProvider).joinEvent(event.id, event.isPublic);
-      
-      // FORCAGE DU REFRESH (ref.invalidate() laisse parfois une UI fantôme "non-chargée" au retour de l'API)
-      ref.refresh(eventMembershipProvider(eventId));
-      ref.refresh(eventDetailProvider(eventId));
-      ref.invalidate(eventsListProvider);
-      ref.invalidate(likedEventsProvider);
-      ref.invalidate(conversationsListProvider); // Le chat général s'est potentiellement ouvert
-
-      if (context.mounted) {
+      _refreshAll();
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(event.isPublic ? "Vous avez rejoint l'événement !" : "Demande envoyée !")),
         );
       }
     } catch (e) {
-      if (context.mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('$e'), backgroundColor: Colors.red),
         );
@@ -231,8 +261,8 @@ class EventDetailScreen extends ConsumerWidget {
     }
   }
 
-  // === GESTION DEMANDES PENDING (Visible par le créateur) ===
-  Widget _buildPendingRequestsSection(BuildContext context, WidgetRef ref, EventModel event) {
+  // === DEMANDES PENDING ===
+  Widget _buildPendingRequestsSection(EventModel event) {
     final pendingAsync = ref.watch(pendingMembersProvider(event.id));
 
     return Column(
@@ -240,25 +270,64 @@ class EventDetailScreen extends ConsumerWidget {
       children: [
         const Divider(),
         const SizedBox(height: 8),
-        const Text('Demandes de participation', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const Text('Demandes en attente', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
-        pendingAsync.when(
-          data: (pendingMembers) {
-            if (pendingMembers.isEmpty) {
-              return const Text('Aucune demande en attente.', style: TextStyle(color: Colors.grey));
-            }
-            return Column(
-              children: pendingMembers.map((member) => _buildPendingMemberTile(context, ref, event, member)).toList(),
-            );
-          },
-          loading: () => const LinearProgressIndicator(),
-          error: (_, __) => const Text('Impossible de charger les demandes'),
-        ),
+        if (pendingAsync.isLoading && !pendingAsync.hasValue)
+          const LinearProgressIndicator()
+        else if (pendingAsync.valueOrNull?.isEmpty ?? true)
+          const Text('Aucune demande en attente.', style: TextStyle(color: Colors.grey))
+        else
+          Column(
+            children: pendingAsync.value!.map((member) => _buildPendingTile(event, member)).toList(),
+          ),
       ],
     );
   }
 
-  Widget _buildPendingMemberTile(BuildContext context, WidgetRef ref, EventModel event, EventMemberModel member) {
+  Future<void> _acceptMember(EventMemberModel member) async {
+    // 1. MUTATION OPTIMISTE DU CACHE RIVERPOD
+    final pendingList = ref.read(pendingMembersProvider(widget.eventId)).valueOrNull;
+    final acceptedList = ref.read(acceptedMembersProvider(widget.eventId)).valueOrNull;
+
+    setState(() {
+      pendingList?.removeWhere((m) => m.id == member.id);
+      
+      if (acceptedList != null && !acceptedList.any((m) => m.id == member.id)) {
+        acceptedList.add(EventMemberModel(
+          id: member.id, eventId: member.eventId, userId: member.userId,
+          status: 'accepted', role: member.role, userName: member.userName,
+        ));
+      }
+    });
+
+    // 2. BACKEND APPEL
+    try {
+      await ref.read(eventsRepositoryProvider).acceptMember(member.id);
+      _refreshAll(); // Resync stat counters in background
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Membre accepté !')));
+    } catch (e) {
+      // Pas de rollback si c'est un hook post-commit, on rafraîchit la vérité PocketBase
+      _refreshAll();
+    }
+  }
+
+  Future<void> _rejectMember(EventMemberModel member) async {
+    final pendingList = ref.read(pendingMembersProvider(widget.eventId)).valueOrNull;
+    
+    setState(() {
+      pendingList?.removeWhere((m) => m.id == member.id);
+    });
+
+    try {
+      await ref.read(eventsRepositoryProvider).rejectMember(member.id);
+      _refreshAll(); // Resync
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Demande refusée.')));
+    } catch (e) {
+      _refreshAll();
+    }
+  }
+
+  Widget _buildPendingTile(EventModel event, EventMemberModel member) {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -267,36 +336,23 @@ class EventDetailScreen extends ConsumerWidget {
         child: Row(
           children: [
             const CircleAvatar(
-              backgroundColor: Colors.deepPurple,
+              backgroundColor: Colors.amber,
               child: Icon(Icons.person, color: Colors.white),
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(member.userName ?? member.userId, style: const TextStyle(fontWeight: FontWeight.w600)),
+              child: Text(member.userName ?? member.userId,
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
             ),
             IconButton(
               icon: const Icon(Icons.check_circle, color: Colors.green),
               tooltip: 'Accepter',
-              onPressed: () async {
-                await ref.read(eventsRepositoryProvider).acceptMember(member.id);
-                ref.refresh(pendingMembersProvider(event.id)); // Force réévaluation immédiate
-                ref.invalidate(eventDetailProvider(event.id)); // Maj des compteurs
-                ref.invalidate(conversationsListProvider); // Maj du chat list central
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Membre accepté !')));
-                }
-              },
+              onPressed: () => _acceptMember(member),
             ),
             IconButton(
               icon: const Icon(Icons.cancel, color: Colors.red),
               tooltip: 'Refuser',
-              onPressed: () async {
-                await ref.read(eventsRepositoryProvider).rejectMember(member.id);
-                ref.refresh(pendingMembersProvider(event.id)); // Force réévaluation immédiate
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Demande refusée.')));
-                }
-              },
+              onPressed: () => _rejectMember(member),
             ),
           ],
         ),
@@ -304,31 +360,93 @@ class EventDetailScreen extends ConsumerWidget {
     );
   }
 
+  // === MEMBRES ACCEPTÉS ===
+  Widget _buildAcceptedMembersSection(EventModel event) {
+    final acceptedAsync = ref.watch(acceptedMembersProvider(event.id));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Divider(),
+        const SizedBox(height: 8),
+        const Text('Participants', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 12),
+        if (acceptedAsync.isLoading && !acceptedAsync.hasValue)
+          const LinearProgressIndicator()
+        else if (acceptedAsync.valueOrNull?.isEmpty ?? true)
+          const Text('Aucun participant pour le moment.', style: TextStyle(color: Colors.grey))
+        else
+          Column(
+            children: acceptedAsync.value!.map((member) => _buildMemberTile(member)).toList(),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildMemberTile(EventMemberModel member) {
+    final isOwner = member.role == 'owner';
+    return Semantics(
+      label: 'Participant: ${member.userName ?? member.userId}${isOwner ? ", organisateur" : ""}',
+      child: ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: CircleAvatar(
+          backgroundColor: isOwner ? const Color(0xFFEEEAFF) : const Color(0xFFDCFCE7),
+          child: Icon(isOwner ? Icons.star : Icons.person,
+              color: isOwner ? const Color(0xFF4F46E5) : const Color(0xFF16A34A)),
+        ),
+        title: Text(member.userName ?? member.userId,
+            style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
+        trailing: isOwner
+            ? Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE0E7FF),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text('Organisateur',
+                    style: TextStyle(fontSize: 12, color: Color(0xFF4F46E5), fontWeight: FontWeight.bold)),
+              )
+            : null,
+      ),
+    );
+  }
+
   // === HELPERS ===
-  Widget _buildIconInfo(IconData icon, String text) {
+  Widget _buildIconInfo(BuildContext context, IconData icon, String text) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: Colors.grey.shade600),
-          const SizedBox(width: 8),
-          Flexible(child: Text(text, style: TextStyle(color: Colors.grey.shade600, fontSize: 14))),
+          Icon(icon, size: 20, color: const Color(0xFF64748B)),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Text(
+              text, 
+              style: const TextStyle(color: Color(0xFF475569), fontSize: 15, fontWeight: FontWeight.w500),
+            )
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildStatusBadge(EventModel event) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: event.isPublic ? Colors.green.shade50 : Colors.amber.shade50,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        event.isPublic ? 'PUBLIC' : 'PRIVÉ',
-        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold,
-            color: event.isPublic ? Colors.green.shade700 : Colors.amber.shade800),
+  Widget _buildStatusBadge(BuildContext context, EventModel event) {
+    // Green pour public, Indigo pour privé (mieux que amber!)
+    final bgColor = event.isPublic ? const Color(0xFFDCFCE7) : const Color(0xFFE0E7FF);
+    final txtColor = event.isPublic ? const Color(0xFF16A34A) : const Color(0xFF4F46E5);
+    
+    return Semantics(
+      label: event.isPublic ? 'Événement public' : 'Événement privé',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          event.isPublic ? 'PUBLIC' : 'PRIVÉ',
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: txtColor, letterSpacing: 0.5),
+        ),
       ),
     );
   }

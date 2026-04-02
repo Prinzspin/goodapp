@@ -54,28 +54,41 @@ async function seed() {
         console.log("OK clean");
 
         // USERS
-        const testUser = await pb.collection("users").create({
-            "email": "test@goodapp.com", "password": GLOBAL_PASS, "passwordConfirm": GLOBAL_PASS,
-            "name": "Compte Test", "username": "tester", "bio": "Testeur officiel"
-        });
+        async function createUser(email, name, username) {
+            const form = new FormData();
+            form.append("email", email);
+            form.append("password", GLOBAL_PASS);
+            form.append("passwordConfirm", GLOBAL_PASS);
+            form.append("name", name);
+            form.append("username", username);
+            
+            try {
+                // Fetch avatar
+                const resp = await fetch(`https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff&size=200`);
+                if (resp.ok) {
+                    const blob = await resp.blob();
+                    form.append("avatar", blob, "avatar.png");
+                }
+            } catch (e) {
+                console.log("Avatar fetch failed for", name);
+            }
+            
+            return await pb.collection("users").create(form);
+        }
+
+        const testUser = await createUser("test@goodapp.com", "Compte Test", "tester");
         console.log("OK test user");
 
         const creators = [];
         for (let i = 1; i <= 10; i++) {
-            const u = await pb.collection("users").create({
-                "email": `creator${i}@demo.com`, "password": GLOBAL_PASS, "passwordConfirm": GLOBAL_PASS,
-                "name": `Creator ${i}`, "username": `creator_${i}`
-            });
+            const u = await createUser(`creator${i}@demo.com`, `Creator ${i}`, `creator_${i}`);
             creators.push(u);
         }
         console.log("OK 10 creators");
 
         const participants = [];
         for (let i = 1; i <= 20; i++) {
-            const u = await pb.collection("users").create({
-                "email": `participant${i}@demo.com`, "password": GLOBAL_PASS, "passwordConfirm": GLOBAL_PASS,
-                "name": `Participant ${i}`, "username": `participant_${i}`
-            });
+            const u = await createUser(`participant${i}@demo.com`, `Participant ${i}`, `participant_${i}`);
             participants.push(u);
         }
         console.log("OK 20 participants");
@@ -94,18 +107,32 @@ async function seed() {
                 d.setDate(d.getDate() + 5 + idx * 2);
                 d.setHours(18 + (idx % 4), 0, 0, 0);
 
-                const ev = await pb.collection("events").create({
-                    "title": `${TITLES[idx]} @ ${loc.name}`,
-                    "description": `Rejoignez-nous pour ${TITLES[idx].toLowerCase()} à ${loc.name}. Ambiance garantie !`,
-                    "start_date": d.toISOString().replace('T', ' ').substring(0, 19) + 'Z',
-                    "is_public": isPublic,
-                    "creator": creators[ci].id,
-                    "location_name": `${loc.name}, Paris`,
-                    "lat": loc.lat,
-                    "lng": loc.lng,
-                    "likes_count": 0,
-                    "members_count": 0
-                });
+                const form = new FormData();
+                form.append("title", `${TITLES[idx]} @ ${loc.name}`);
+                form.append("description", `Rejoignez-nous pour ${TITLES[idx].toLowerCase()} à ${loc.name}. Ambiance garantie !`);
+                form.append("start_date", d.toISOString().replace('T', ' ').substring(0, 19) + 'Z');
+                form.append("is_public", isPublic ? "true" : "false");
+                form.append("creator", creators[ci].id);
+                form.append("location_name", `${loc.name}, Paris`);
+                form.append("lat", loc.lat.toString());
+                form.append("lng", loc.lng.toString());
+                form.append("likes_count", "0");
+                form.append("members_count", "0");
+
+                // Images
+                for (let p = 1; p <= 2; p++) {
+                     try {
+                         const resp = await fetch(`https://picsum.photos/seed/${idx}_${p}/800/600`);
+                         if (resp.ok) {
+                             const blob = await resp.blob();
+                             form.append("photos", blob, `photo_${p}.jpg`);
+                         }
+                     } catch (e) {
+                         console.log("Photo fetch failed for event", idx);
+                     }
+                }
+
+                const ev = await pb.collection("events").create(form);
                 events.push({ id: ev.id, title: ev.title || TITLES[idx], _isPublic: isPublic });
 
                 // EXPLICIT DB REPAIRS IN CASE HOOKS FAIL/SWALLOW:

@@ -30,6 +30,7 @@ class MessageModel {
   final String content;
   final DateTime created;
   final String? authorName;
+  final String? authorAvatar;
 
   MessageModel({
     required this.id,
@@ -38,6 +39,7 @@ class MessageModel {
     required this.content,
     required this.created,
     this.authorName,
+    this.authorAvatar,
   });
 
   factory MessageModel.fromRecord(RecordModel record) {
@@ -48,6 +50,7 @@ class MessageModel {
       content: record.getStringValue('content'),
       created: DateTime.parse(record.created),
       authorName: record.expand['author']?[0].getStringValue('name'),
+      authorAvatar: record.expand['author']?[0].getStringValue('avatar'),
     );
   }
 }
