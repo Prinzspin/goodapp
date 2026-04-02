@@ -246,7 +246,13 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
   Future<void> _joinEvent(EventModel event) async {
     try {
       await ref.read(eventsRepositoryProvider).joinEvent(event.id, event.isPublic);
-      _refreshAll();
+      
+      // SYNC REFETCH: Permet de bloquer la modale 
+      // et d'avoir la data immédiatement dispo sans flickering/stale data
+      await ref.refresh(eventMembershipProvider(event.id).future);
+      await ref.refresh(eventDetailProvider(event.id).future);
+      
+      _refreshAll(); 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(event.isPublic ? "Vous avez rejoint l'événement !" : "Demande envoyée !")),

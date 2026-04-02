@@ -59,16 +59,6 @@ class ChatRepository {
   Future<ConversationModel> fetchConversationByEvent(String eventId) async {
     if (_user == null) throw Exception("Non authentifié");
 
-    // Vérifier s'il est membre accepté ou owner
-    final membership = await _pb.collection('event_members').getList(
-      page: 1, perPage: 1,
-      filter: 'event = "$eventId" && user = "${_user!.id}" && status = "accepted"',
-    );
-
-    if (membership.items.isEmpty) {
-      throw Exception("Vous devez être membre accepté pour accéder à cette discussion.");
-    }
-
     try {
       final record = await _pb.collection('conversations').getFirstListItem(
         'event = "$eventId"',

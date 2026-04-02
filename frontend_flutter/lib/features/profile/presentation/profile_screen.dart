@@ -62,6 +62,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             expandedHeight: 280,
             pinned: true,
             backgroundColor: Colors.deepPurple,
+            iconTheme: const IconThemeData(color: Colors.white),
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
                 decoration: const BoxDecoration(
