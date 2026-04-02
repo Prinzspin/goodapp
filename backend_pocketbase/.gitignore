@@ -1,0 +1,6 @@
+# PocketBase data directory — contains database, uploads, logs
+pb_data/
+
+# OS
+.DS_Store
+Thumbs.db
