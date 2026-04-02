@@ -66,14 +66,28 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
   Future<void> _send(String conversationId) async {
     if (_controller.text.trim().isEmpty) return;
     final content = _controller.text.trim();
-    _controller.clear();
 
     try {
-      await ref.read(chatRepositoryProvider).sendMessage(conversationId, content);
+      // Attendre la confirmation backend avant de vider l'input
+      final savedMessage = await ref.read(chatRepositoryProvider).sendMessage(conversationId, content);
+      if (mounted) {
+        _controller.clear();
+        // Injecter directement dans l'état local sans attendre le SSE
+        final alreadyExists = _localMessages.any((m) => m.id == savedMessage.id);
+        if (!alreadyExists) {
+          setState(() {
+            _localMessages.add(savedMessage);
+          });
+          _scrollToBottom();
+        }
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text("Envoi échoué : $e"),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -162,10 +176,32 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
           );
         }
         return Scaffold(
-          appBar: AppBar(title: const Text('Erreur')),
+          appBar: AppBar(title: const Text('Discussion inaccessible')),
           body: Center(child: Padding(
             padding: const EdgeInsets.all(24.0),
-            child: Text('Vous n\'avez pas accès à cette discussion.\nAssurez-vous d\'avoir rejoint l\'événement et d\'être accepté.\n\nDétail technique : $e', textAlign: TextAlign.center),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.lock_outline, size: 64, color: Colors.grey),
+                const SizedBox(height: 16),
+                const Text(
+                  'Cette discussion est réservée aux participants.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Assurez-vous d\'avoir rejoint l\'événement et que votre demande a bien été acceptée par l\'organisateur.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey, fontSize: 14),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: () => context.pop(),
+                  child: const Text('Retour'),
+                )
+              ],
+            ),
           )),
         );
       },

@@ -8,24 +8,24 @@ onRecordAfterCreateSuccess((e) => {
         const creatorId = e.record.get("creator");
 
         // A. Créer la conversation (si pas déjà existante)
-        const checkConv = $app.dao().findRecordsByExpr("conversations", $dbx.exp("event = {:event}", { "event": eventId }));
+        const checkConv = $app.findRecordsByExpr("conversations", $dbx.exp("event = {:event}", { "event": eventId }));
         if (!checkConv || checkConv.length === 0) {
-            const convCol = $app.dao().findCollectionByNameOrId("conversations");
+            const convCol = $app.findCollectionByNameOrId("conversations");
             const conversation = new Record(convCol);
             conversation.set("event", eventId);
-            $app.dao().saveRecord(conversation);
+            $app.save(conversation);
         }
 
         // B. Créer l'owner
-        const checkMem = $app.dao().findRecordsByExpr("event_members", $dbx.exp("event = {:event} AND user = {:user}", { "event": eventId, "user": creatorId }));
+        const checkMem = $app.findRecordsByExpr("event_members", $dbx.exp("event = {:event} AND user = {:user}", { "event": eventId, "user": creatorId }));
         if (!checkMem || checkMem.length === 0) {
-            const memCol = $app.dao().findCollectionByNameOrId("event_members");
+            const memCol = $app.findCollectionByNameOrId("event_members");
             const member = new Record(memCol);
             member.set("event", eventId);
             member.set("user", creatorId);
             member.set("role", "owner");
             member.set("status", "accepted");
-            $app.dao().saveRecord(member);
+            $app.save(member);
         }
     } catch (err) {
         $app.logger().error("HOOK EVENT CREATE ERROR: " + err);
@@ -39,20 +39,20 @@ function handleMembershipSync(record) {
         const status = record.get("status");
 
         if (status === "accepted") {
-            const parsedLikes = $app.dao().findRecordsByExpr("event_likes", $dbx.exp("event = {:event} AND user = {:user}", {"event": eventId, "user": userId}));
+            const parsedLikes = $app.findRecordsByExpr("event_likes", $dbx.exp("event = {:event} AND user = {:user}", {"event": eventId, "user": userId}));
             if (!parsedLikes || parsedLikes.length === 0) {
-                 const likesCol = $app.dao().findCollectionByNameOrId("event_likes");
+                 const likesCol = $app.findCollectionByNameOrId("event_likes");
                  const newLike = new Record(likesCol);
                  newLike.set("event", eventId);
                  newLike.set("user", userId);
-                 $app.dao().saveRecord(newLike);
+                 $app.save(newLike);
             }
         }
 
-        const acceptedMembers = $app.dao().findRecordsByExpr("event_members", $dbx.exp("event = {:event} AND status = 'accepted'", {"event": eventId}));
+        const acceptedMembers = $app.findRecordsByExpr("event_members", $dbx.exp("event = {:event} AND status = 'accepted'", {"event": eventId}));
         let acceptedCount = acceptedMembers ? acceptedMembers.length : 0;
         
-        $app.dao().db()
+        $app.db()
             .newQuery("UPDATE events SET members_count={:m} WHERE id={:id}")
             .bind({ "m": acceptedCount, "id": eventId }).execute();
     } catch (err) {
@@ -64,19 +64,30 @@ onRecordAfterCreateSuccess((e) => { handleMembershipSync(e.record); }, "event_me
 onRecordAfterUpdateSuccess((e) => { handleMembershipSync(e.record); }, "event_members");
 
 onRecordCreateRequest((e) => {
+    let authorIdRaw = e.record.get("author");
+    let conversationIdRaw = e.record.get("conversation");
+
+    let authorId = Array.isArray(authorIdRaw) ? authorIdRaw[0] : String(authorIdRaw);
+    let conversationId = Array.isArray(conversationIdRaw) ? conversationIdRaw[0] : String(conversationIdRaw);
+
+    let eventId = "";
     try {
-        const conversationId = e.record.get("conversation");
-        const authorId = e.record.get("author");
+        const conversation = $app.findRecordById("conversations", conversationId);
+        let eventIdRaw = conversation.get("event");
+        eventId = Array.isArray(eventIdRaw) ? eventIdRaw[0] : String(eventIdRaw);
+    } catch (err) {
+        throw new BadRequestError("Conversation invalide.");
+    }
 
-        const conversation = $app.dao().findRecordById("conversations", conversationId);
-        const eventId = conversation.get("event");
-
-        const isMember = $app.dao().findRecordsByExpr("event_members", $dbx.exp("event = {:event} AND user = {:user} AND status = 'accepted'", { "event": eventId, "user": authorId }));
-        
-        if (!isMember || isMember.length === 0) {
-            throw new Error("Non accepted.");
-        }
+    try {
+        const result = new DynamicModel({ "id": "" });
+        $app.db()
+            .newQuery("SELECT id FROM event_members WHERE event={:event} AND user={:user} AND status='accepted' LIMIT 1")
+            .bind({"event": eventId, "user": authorId})
+            .one(result);
     } catch (err) {
         throw new BadRequestError("Accès refusé. Membership accepted requis.");
     }
+    
+    return e.next();
 }, "messages");

@@ -112,12 +112,16 @@ class ChatRepository {
     _pb.collection('messages').unsubscribe('*');
   }
 
-  Future<void> sendMessage(String conversationId, String content) async {
+  Future<MessageModel> sendMessage(String conversationId, String content) async {
     if (_user == null) throw Exception("Non authentifié");
-    await _pb.collection('messages').create(body: {
-      "conversation": conversationId,
-      "author": _user?.id,
-      "content": content.trim(),
-    });
+    final response = await _pb.collection('messages').create(
+      body: {
+        "conversation": conversationId,
+        "author": _user!.id,
+        "content": content.trim(),
+      },
+      expand: 'author',
+    );
+    return MessageModel.fromRecord(response);
   }
 }
