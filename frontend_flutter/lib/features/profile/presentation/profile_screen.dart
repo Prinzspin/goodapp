@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:frontend_flutter/shared/providers/auth_provider.dart';
 import 'package:frontend_flutter/features/profile/data/profile_repository.dart';
 import 'package:frontend_flutter/core/network/pb_client.dart';
+import 'package:frontend_flutter/shared/providers/accessibility_provider.dart';
 import 'package:intl/intl.dart';
 import 'package:go_router/go_router.dart';
 
@@ -14,7 +15,6 @@ class ProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
-  bool _isEditing = false;
   late TextEditingController _nameController;
   late TextEditingController _bioController;
 
@@ -35,6 +35,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final user = ref.watch(authStateProvider);
     if (user == null) return const Scaffold(body: Center(child: CircularProgressIndicator()));
 
@@ -54,22 +55,25 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
 
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: CustomScrollView(
         slivers: [
           // Header avec Dégradé et Avatar
           SliverAppBar(
             expandedHeight: 280,
             pinned: true,
-            backgroundColor: Colors.deepPurple,
+            backgroundColor: theme.colorScheme.primary,
             iconTheme: const IconThemeData(color: Colors.white),
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [Colors.deepPurple, Color(0xFF673AB7)],
+                    colors: [
+                      theme.colorScheme.primary,
+                      Color.lerp(theme.colorScheme.primary, Colors.black, 0.1) ?? theme.colorScheme.primary,
+                    ],
                   ),
                 ),
                 child: Column(
@@ -81,7 +85,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       backgroundColor: Colors.white,
                       backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
                       child: avatarUrl == null 
-                          ? const Icon(Icons.person, size: 50, color: Colors.deepPurple)
+                          ? Icon(Icons.person, size: 50, color: theme.colorScheme.primary)
                           : null,
                     ),
                     const SizedBox(height: 12),
@@ -98,9 +102,23 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ),
             ),
             actions: [
-              IconButton(
-                icon: const Icon(Icons.logout, color: Colors.white),
-                onPressed: () => ref.read(profileRepositoryProvider).logout(),
+              Semantics(
+                button: true,
+                label: 'Réglages accessibilité',
+                child: IconButton(
+                  icon: const Icon(Icons.accessibility_new, color: Colors.white),
+                  tooltip: 'Réglages accessibilité',
+                  onPressed: () => _showAccessibilitySettings(context),
+                ),
+              ),
+              Semantics(
+                button: true,
+                label: 'Se déconnecter',
+                child: IconButton(
+                  icon: const Icon(Icons.logout, color: Colors.white),
+                  tooltip: 'Se déconnecter',
+                  onPressed: () => ref.read(profileRepositoryProvider).logout(),
+                ),
               ),
             ],
           ),
@@ -116,9 +134,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   statsAsync.when(
                     data: (stats) => Row(
                       children: [
-                        _buildStatCard("Rejoints", stats["joined"].toString(), Icons.event_available),
+                        _buildStatCard(context, "Rejoints", stats["joined"].toString(), Icons.event_available),
                         const SizedBox(width: 16),
-                        _buildStatCard("Créés", stats["hosted"].toString(), Icons.rocket_launch),
+                        _buildStatCard(context, "Créés", stats["hosted"].toString(), Icons.rocket_launch),
                       ],
                     ),
                     loading: () => const LinearProgressIndicator(),
@@ -128,29 +146,29 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   const SizedBox(height: 24),
 
                   // Informations de Contact
-                  _buildSectionHeader("Informations Personnelles"),
+                  _buildSectionHeader(context, "Informations Personnelles"),
                   const SizedBox(height: 12),
-                  _buildProfileCard([
-                    _buildInfoRow(Icons.account_circle_outlined, "Nom/Pseudo", user.getStringValue('name')),
+                  _buildProfileCard(context, [
+                    _buildInfoRow(context, Icons.account_circle_outlined, "Nom/Pseudo", user.getStringValue('name')),
                     const Divider(),
-                    _buildInfoRow(Icons.email_outlined, "Email", user.getStringValue('email')),
+                    _buildInfoRow(context, Icons.email_outlined, "Email", user.getStringValue('email')),
                     const Divider(),
-                    _buildInfoRow(Icons.calendar_month_outlined, "Inscription", memberSince),
+                    _buildInfoRow(context, Icons.calendar_month_outlined, "Inscription", memberSince),
                   ]),
 
                   if (user.getStringValue('bio').isNotEmpty) ...[
                     const SizedBox(height: 24),
-                    _buildSectionHeader("Biographie"),
+                    _buildSectionHeader(context, "Biographie"),
                     const SizedBox(height: 12),
-                    _buildProfileCard([
-                      Text(user.getStringValue('bio'), style: const TextStyle(fontSize: 14, height: 1.5, color: Colors.black87)),
+                    _buildProfileCard(context, [
+                      Text(user.getStringValue('bio'), style: theme.textTheme.bodyMedium),
                     ]),
                   ],
 
                   const SizedBox(height: 24),
 
                   // My Events
-                  _buildSectionHeader("Mes Événements"),
+                  _buildSectionHeader(context, "Mes Événements"),
                   const SizedBox(height: 12),
                   myEventsAsync.when(
                     data: (events) => events.isEmpty 
@@ -188,55 +206,61 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
-  Widget _buildStatCard(String label, String value, IconData icon) {
+  void _showAccessibilitySettings(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => const _AccessibilitySettingsSheet(),
+    );
+  }
+
+  Widget _buildStatCard(BuildContext context, String label, String value, IconData icon) {
+    final theme = Theme.of(context);
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+      child: Card(
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+          child: Column(
+            children: [
+              Icon(icon, color: theme.colorScheme.primary, size: 24),
+              const SizedBox(height: 8),
+              Text(value, style: theme.textTheme.titleLarge),
+              Text(label, style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey)),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildProfileCard(BuildContext context, List<Widget> children) {
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
         child: Column(
-          children: [
-            Icon(icon, color: Colors.deepPurple, size: 24),
-            const SizedBox(height: 8),
-            Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-          ],
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: children,
         ),
       ),
     );
   }
 
-  Widget _buildProfileCard(List<Widget> children) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: children,
-      ),
-    );
-  }
-
-  Widget _buildInfoRow(IconData icon, String label, String value) {
+  Widget _buildInfoRow(BuildContext context, IconData icon, String label, String value) {
+    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
-          Icon(icon, size: 20, color: Colors.deepPurple.shade300),
+          Icon(icon, size: 20, color: theme.colorScheme.primary.withOpacity(0.7)),
           const SizedBox(width: 16),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
-              Text(value.isNotEmpty ? value : "N/A", style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+              Text(label, style: theme.textTheme.labelSmall?.copyWith(color: Colors.grey)),
+              Text(value.isNotEmpty ? value : "N/A", style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w500)),
             ],
           ),
         ],
@@ -244,24 +268,30 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
-  Widget _buildSectionHeader(String title) {
-    return Row(
-      children: [
-        Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
-      ],
+  Widget _buildSectionHeader(BuildContext context, String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Text(title.toUpperCase(), style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            color: Colors.blueGrey,
+            letterSpacing: 1.2,
+            fontSize: 12,
+          )),
+        ],
+      ),
     );
   }
 
   Widget _buildMiniEventCard(BuildContext context, dynamic event) {
+    final theme = Theme.of(context);
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       elevation: 0,
-      color: Colors.white,
       child: ListTile(
-        leading: const Icon(Icons.event, color: Colors.deepPurple),
-        title: Text(event.title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-        subtitle: Text(DateFormat('dd MMM yyyy').format(event.startDate), style: const TextStyle(fontSize: 12)),
+        leading: Icon(Icons.event, color: theme.colorScheme.primary),
+        title: Text(event.title, style: theme.textTheme.titleSmall),
+        subtitle: Text(DateFormat('dd MMM yyyy').format(event.startDate), style: theme.textTheme.bodySmall),
         trailing: const Icon(Icons.chevron_right, size: 18),
         onTap: () => context.push('/event/${event.id}'),
       ),
@@ -279,11 +309,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text('Modifier mon profil', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            Text('Modifier mon profil', style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: 20),
-            TextField(controller: _nameController, decoration: const InputDecoration(labelText: 'Nom', border: OutlineInputBorder())),
+            TextField(controller: _nameController, decoration: const InputDecoration(labelText: 'Nom')),
             const SizedBox(height: 16),
-            TextField(controller: _bioController, decoration: const InputDecoration(labelText: 'Bio', border: OutlineInputBorder())),
+            TextField(controller: _bioController, decoration: const InputDecoration(labelText: 'Bio')),
             const SizedBox(height: 30),
             ElevatedButton(
               onPressed: () async {
@@ -293,6 +323,108 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               child: const Text('Enregistrer'),
             ),
             const SizedBox(height: 30),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AccessibilitySettingsSheet extends ConsumerWidget {
+  const _AccessibilitySettingsSheet();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final highContrast = ref.watch(highContrastProvider);
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.4,
+      minChildSize: 0.3,
+      maxChildSize: 0.6,
+      builder: (ctx, scrollCtrl) => Container(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 12, bottom: 8),
+              width: 40, height: 4,
+              decoration: BoxDecoration(color: theme.dividerColor, borderRadius: BorderRadius.circular(2)),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+              child: Row(
+                children: [
+                  Icon(Icons.accessibility_new, color: theme.colorScheme.primary, size: 24),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Réglages accessibilité',
+                      style: theme.textTheme.titleLarge,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.of(ctx).pop(),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: ListView(
+                controller: scrollCtrl,
+                padding: const EdgeInsets.all(24),
+                children: [
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    secondary: Icon(Icons.contrast, color: theme.colorScheme.primary),
+                    title: Text('Contraste élevé', style: theme.textTheme.titleMedium),
+                    subtitle: Text(
+                      'Renforce les couleurs pour une meilleure lisibilité',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                    value: highContrast,
+                    activeColor: theme.colorScheme.primary,
+                    onChanged: (v) => ref.read(highContrastProvider.notifier).state = v,
+                  ),
+                  const SizedBox(height: 16),
+                  const Divider(),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: theme.colorScheme.primary.withOpacity(0.1)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.info_outline, color: theme.colorScheme.primary, size: 20),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Lecteur d\'écran', style: theme.textTheme.titleSmall),
+                              const SizedBox(height: 4),
+                              Text(
+                                'L\'application est optimisée pour TalkBack (Android) et VoiceOver (iOS).',
+                                style: theme.textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),

@@ -62,7 +62,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                           child: Icon(
                             Icons.location_on,
                             size: 40,
-                            color: _selectedEvent?.id == event.id ? Colors.deepPurple : Colors.red,
+                            color: _selectedEvent?.id == event.id ? const Color(0xFF4F46E5) : Colors.red,
                           ),
                         ),
                       );
@@ -105,7 +105,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               offset: const Offset(0, 4),
             ),
           ],
-          border: Border.all(color: Colors.deepPurple.shade100, width: 2),
+          border: Border.all(color: const Color(0xFFC7D2FE), width: 2),
         ),
         child: Row(
           children: [
@@ -116,7 +116,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 children: [
                   Text(
                     event.title,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.deepPurple),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF4F46E5)),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -142,7 +142,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: Colors.deepPurple),
+            const Icon(Icons.chevron_right, color: Color(0xFF4F46E5)),
           ],
         ),
       ),

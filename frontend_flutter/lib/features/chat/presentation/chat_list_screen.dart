@@ -28,7 +28,7 @@ class ChatListScreen extends ConsumerWidget {
                   
                   return ListTile(
                     leading: const CircleAvatar(
-                      backgroundColor: Colors.deepPurple,
+                      backgroundColor: const Color(0xFF4F46E5),
                       child: Icon(Icons.chat_bubble_outline, color: Colors.white),
                     ),
                     title: Text(

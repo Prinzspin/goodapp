@@ -27,7 +27,7 @@ class EventCard extends ConsumerWidget {
     
     // Status badges colors (accessible variants)
     final badgeBgColor = event.isPublic ? const Color(0xFFDCFCE7) : const Color(0xFFE0E7FF);
-    final badgeTxtColor = event.isPublic ? const Color(0xFF16A34A) : const Color(0xFF4F46E5);
+    final badgeTxtColor = event.isPublic ? const Color(0xFF16A34A) : Theme.of(context).colorScheme.primary;
     final badgeIcon = event.isPublic ? Icons.public : Icons.lock_outline;
 
     return Semantics(

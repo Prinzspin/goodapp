@@ -144,7 +144,7 @@ class _EventFormScreenState extends ConsumerState<EventFormScreen> {
               ListTile(
                 title: const Text('Date & Heure'),
                 subtitle: Text(DateFormat('EEEE d MMMM yyyy, HH:mm').format(_selectedDate)),
-                leading: const Icon(Icons.calendar_today, color: Colors.deepPurple),
+                leading: const Icon(Icons.calendar_today, color: Color(0xFF4F46E5)),
                 onTap: _pickDate,
                 tileColor: Colors.grey.shade100,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

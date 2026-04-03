@@ -75,7 +75,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Icon(Icons.event, size: 80, color: Colors.deepPurple),
+              const Icon(Icons.event, size: 80, color: Color(0xFF4F46E5)),
               const SizedBox(height: 24),
               const Text(
                 'Créer un compte',
@@ -83,7 +83,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
-                  color: Colors.deepPurple,
+                  color: const Color(0xFF4F46E5),
                 ),
               ),
               const SizedBox(height: 32),

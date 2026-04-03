@@ -10,11 +10,11 @@ class SplashScreen extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.event, size: 80, color: Colors.deepPurple),
+            Icon(Icons.event, size: 80, color: Color(0xFF4F46E5)),
             SizedBox(height: 24),
             CircularProgressIndicator(),
             SizedBox(height: 16),
-            Text('Chargement...', style: TextStyle(color: Colors.deepPurple)),
+            Text('Chargement...', style: TextStyle(color: Color(0xFF4F46E5))),
           ],
         ),
       ),
