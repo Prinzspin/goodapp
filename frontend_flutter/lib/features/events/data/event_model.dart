@@ -46,7 +46,7 @@ class EventModel {
       lat: record.getDoubleValue('lat'),
       lng: record.getDoubleValue('lng'),
       isPublic: record.getBoolValue('is_public'),
-      photos: record.getListValue<String>('photos'),
+      photos: List<String>.from(record.getListValue<String>('photos') ?? []),
       creatorId: record.getStringValue('creator'),
       likesCount: record.getIntValue('likes_count'),
       membersCount: record.getIntValue('members_count'),
